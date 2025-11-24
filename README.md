@@ -1,6 +1,6 @@
 # Agentic AI Root Cause Observability
 
-## Introductio
+## Introduction
 
 This project explores how agent-based AI systems can perform automated root cause localization in distributed applications by leveraging observability data such as logs, metrics, and traces collected through the OpenTelemetry standard. Using Google’s Agent Development Kit (ADK) together with the OpenTelemetry demo application, the goal is to design an AI agent capable of retrieving telemetry, integrating multi-modal signals, and reasoning about system behavior to propose likely root causes for IT incidents.
 
