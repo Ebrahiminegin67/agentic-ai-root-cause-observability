@@ -1,6 +1,6 @@
 # Agentic AI Root Cause Observability
 
-## Introduction
+## Introductio
 
 This thesis investigates how agent-based systems can perform root cause localization using observability data (logs, metrics, traces) following the OpenTelemetry standard. Using Google’s ADK and the OpenTelemetry demo application, you will design an agent that collects and reasons over telemetry data to propose likely root causes for incidents.
 
