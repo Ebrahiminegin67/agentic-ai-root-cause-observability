@@ -1,4 +1,4 @@
-# Agentic AI Observability
+# Agentic AI Root Cause Observability
 
 ## Introduction
 
