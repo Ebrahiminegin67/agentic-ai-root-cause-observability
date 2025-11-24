@@ -2,11 +2,17 @@
 
 ## Introductio
 
-This thesis investigates how agent-based systems can perform root cause localization using observability data (logs, metrics, traces) following the OpenTelemetry standard. Using Google’s ADK and the OpenTelemetry demo application, you will design an agent that collects and reasons over telemetry data to propose likely root causes for incidents.
+This project explores how agent-based AI systems can perform automated root cause localization in distributed applications by leveraging observability data such as logs, metrics, and traces collected through the OpenTelemetry standard. Using Google’s Agent Development Kit (ADK) together with the OpenTelemetry demo application, the goal is to design an AI agent capable of retrieving telemetry, integrating multi-modal signals, and reasoning about system behavior to propose likely root causes for IT incidents.
 
-The research focus is on comparing different approaches to fusing multi-modal telemetry and exploiting service-dependency graphs, and on benchmarking an agentic approach against simpler correlation-based or rule-based baselines. You will run controlled fault-injection experiments, measure root cause ranking accuracy, and analyze robustness under noisy or incomplete telemetry.
+The research emphasizes several core components:
 
-This document presents a framework for using agent-based AI to perform automated root cause analysis in distributed systems by leveraging observability data—logs, metrics, and traces—collected through OpenTelemetry. It describes how telemetry is generated, stored, and correlated using trace IDs, and how service-dependency graphs reveal request flows across services. The core contribution is an agent built with Google’s Agent Development Kit (ADK) that retrieves relevant telemetry, constructs contextual prompts, and uses an LLM to reason about failures and propose likely root causes. The document outlines the architectural components, challenges of multi-modal data fusion, handling noisy or incomplete telemetry, and ensuring secure, scalable data management. It also details an evaluation strategy based on fault injection and comparisons with rule-based or correlation-based baselines, demonstrating how agentic AI can enhance the speed, accuracy, and robustness of incident analysis in complex distributed environments.
+- **Multi-modal telemetry fusion:** combining logs, metrics, and traces into a unified context to improve diagnostic accuracy.
+- **Service dependency graph analysis:** using trace relationships to understand request flows and identify where failures originate.
+- **Benchmarking and comparison:** evaluating the agentic approach against traditional correlation-based or rule-based baselines.
+- **Fault injection experiments:** deliberately introducing errors into the system to generate realistic failure scenarios and measure the agent’s root-cause ranking performance.
+- **Robustness analysis:** assessing how well the agent performs under noisy, incomplete, or partially missing telemetry—common in real-world monitoring systems.
+
+This document outlines a conceptual framework that explains how telemetry is produced, propagated, stored, and correlated using trace IDs, how dependency graphs emerge from spans, and how an agent built using Google’s ADK can construct contextual prompts for an LLM to perform incident analysis. It also highlights architectural considerations, the challenges of multi-modal data fusion, secure and scalable data management, and a rigorous evaluation strategy. Together, these components demonstrate how agentic AI can meaningfully improve the speed, accuracy, and reliability of root cause analysis in complex distributed environments.
 ## Observability with OpenTelemetry in Distributed Systems
 
 ### Overview
@@ -15,14 +21,24 @@ OpenTelemetry is an open-source observability framework that provides a standard
 ### Architecture Components
 ![OpenTelemetry Logo](images/Obs_Otel_Architecture.png)
 ### Logging Mechanism
-1. When a request comes to system, a unique trace ID is generated to track the request across all services.
-2. Each service (or span) involved in processing the request logs relevant information, including the trace ID, span_id, parent_id, status (OK, ERROR), timestamps, attributes and events.
-3. Each service exports the collected telemetry data to a centralized database (preferably asynchronously) for storage and analysis.
+1. 1. **When a request enters the system, the first service that receives it (the entrypoint service) generates a unique trace_id.**
+    
+    This trace_id is propagated to all downstream services to correlate their spans under the same distributed trace.
+    
+2. **Each service creates a span** and logs relevant telemetry, including:
+    - trace_id
+    - span_id
+    - parent_id
+    - timestamps
+    - status (OK, ERROR)
+    - attributes and events
+3. **Each service exports its telemetry asynchronously to an OpenTelemetry Collector**, which processes and forwards the data to a storage backend for analysis.
 
 ### Telemetry Data Types
-1. **Traces**: Represent the end-to-end journey of a request as it flows through various services. Each trace consists of multiple spans, each representing a unit of work within a service.
-2. **Metrics**: Quantitative measurements that provide insights into the performance and health of services
-3. **Logs**: Textual records that capture events and state changes within services, often used for debugging and auditing.
+1. **Traces**: Represent end-to-end execution of a request. A trace consists of multiple spans, one per operation or service call.
+2. **Metrics**: Numbers that represent system performance over time:
+latency, CPU usage, memory, throughput, error rate, etc.
+3. **Logs**: Unstructured or semi-structured text containing details about events, errors, warnings, or checkpoints.
 ...
 
 ### Sample Trace Data
@@ -65,14 +81,24 @@ Database should support efficient querying and analysis of telemetry data.
 
 
 ## Discover root cause of an Incident (by Human)
-1. Use trace IDs to follow the request path across services.
-2. Query the database for logs, metrics, and traces associated with the trace ID.
-3. Draw a service dependency graph to visualize interactions between services (with parent_id).
-4. Analyze the collected data to identify root causes of issues and errors.
+1. **Follow the trace ID** to reconstruct the full request path across all services and identify where delays or errors occurred.
+2. **Query the telemetry backend** for all logs, metrics, and spans associated with the trace ID and timestamps.
+3. **Build the service dependency graph** using parent–child span relationships to visualize how the request propagated.
+4. **Analyze the combined telemetry** to determine which service produced the first failure, why it happened, and how it affected downstream services.
 
-## Discover root cause of an Incident (by AI Agent)
-1. Use trace IDs to follow the request path across services.
-2. Create a prompt with the trace ID and relevant context.
+## Discover the root cause of an Incident (by AI Agent)
+1. The AI agent **uses the trace ID** to retrieve all related telemetry using its tools (logs, metrics, traces, span relationships).
+2. The agent **constructs a contextual prompt** that includes:
+    - the trace ID
+    - logs linked to the failing spans
+    - relevant metrics (latency spikes, error counts, resource usage)
+    - the reconstructed service dependency graph
+    - any detected anomalies or errors
+3. The agent **sends this prompt to the LLM** through Google ADK.
+4. The LLM processes the prompt and produces a structured root-cause explanation and possible remediation steps.
+5. The agent **evaluates and refines the output** (e.g., checking for hallucinations or inconsistencies).
+6. The agent **formats the final analysis** into a human-readable summary.
+7. The agent **presents the result to operators**, supporting faster detection, diagnosis, and resolution of incidents.
 A simple prompt template could be:
    ```shell
     Agent Role: You are an AI agent specialized in analyzing distributed system telemetry data.
@@ -84,17 +110,43 @@ A simple prompt template could be:
     Service Dependency Graph: <service dependency graph> 
     Output Format: Provide a detailed analysis of the root cause, affected services, and recommended actions to resolve the incident.
    ```
-3. Send the prompt to the AI agent for analysis.
-4. Agentic AI send the prompt to LLM for processing.
-5. LLM processes the prompt and generates a response with the root cause analysis.
-6. The AI agent reviews the LLM response and formats it for human consumption.
-7. The AI agent presents the analysis to human operators for further action.
 
 ## Agentic AI Architectural Components
 ![Agentic AI Architecture](images/Obs_Agentic_AI.png)
 
+The architecture consists of three main layers: the **observability pipeline**, the **agentic RCA system**, and the **LLM reasoning engine**.
+
+### **1. Observability Pipeline**
+
+Distributed services instrumented with OpenTelemetry generate **logs**, **metrics**, and **traces**.
+
+This telemetry is sent to the **OpenTelemetry Collector**, which receives, processes, and exports the data to a scalable telemetry database.
+
+All telemetry is correlated using a shared **trace_id**.
+
+### **2. Incident Detection and Triggering**
+
+When an incident occurs (e.g., an error or latency spike), an incident detection system forwards an alert to the Agentic AI component, including the **trace_id** of the failing request.
+
+### **3. Agentic AI**
+
+The agent uses its tools to:
+
+- query logs, metrics, and traces associated with the trace_id
+- reconstruct the service dependency graph from span relationships
+- identify anomalies in latency or error status
+- prepare a structured prompt that includes all relevant telemetry
+
+The agent then submits this contextual prompt to the LLM via Google’s Agent Development Kit (ADK).
+
+### **4. LLM Reasoning and Response**
+
+The LLM analyzes the multi-modal telemetry, identifies the most likely root cause, explains how the issue propagated across services, and recommends remediation actions.
+
+The agent validates the response, formats it for human consumption, and sends it back to the incident analysis system.
+
 ## Google ADK
-The Google Agent Development Kit (ADK) provides tools and libraries to build intelligent agents that can interact with various data sources and perform complex tasks. In this architecture, the ADK is used to create an AI agent that can process telemetry data and perform root cause analysis.
+The Google Agent Development Kit (ADK) provides a framework for building intelligent, tool-using agents that can retrieve data, perform reasoning, and interact with large language models. In this architecture, ADK is used to implement an RCA (Root Cause Analysis) agent that queries telemetry, constructs prompts, and performs LLM-driven analysis.
 
 A pseudo-code example of an agent using Google ADK:
 ```python
@@ -103,11 +155,11 @@ START RootCauseAgent
 FUNCTION run_analysis(trace_id):
 
     # 1. Collect telemetry
-    telemetry = fetch_telemetry(trace_id)
+    telemetry = tools.fetch_telemetry(trace_id)
         # → logs, metrics, traces
 
     # 2. Build Service Dependency Graph
-    graph = build_service_graph(telemetry.traces)
+    graph = tools.build_service_graph(telemetry.traces)
 
     # 3. Create prompt for LLM
     prompt = """
@@ -121,10 +173,12 @@ FUNCTION run_analysis(trace_id):
     """
 
     # 4. Send prompt to the LLM (Gemini via ADK)
-    llm_response = LLM.generate(prompt)
+    llm_response = llm.generate_content(prompt)
 
     # 5. Format results for human operators
-    return format_response(llm_response)
+    result = tools.format_response(llm_response)
+
+    return result
 
 END FUNCTION
 
@@ -153,5 +207,7 @@ END FUNCTION
 5. Collect feedback from human operators on the usefulness and clarity of the AI agent's analysis.
 
 ## Conclusion
-This thesis explores the potential of agent-based systems to perform root cause localization in distributed systems using observability data. By leveraging OpenTelemetry and advanced AI techniques, the research aims to enhance the efficiency and accuracy of incident analysis, ultimately improving system reliability and performance.
+This project investigates how agent-based AI systems can automate root cause localization in distributed systems by leveraging multi-modal observability data collected through OpenTelemetry. The proposed architecture demonstrates how an AI agent can retrieve telemetry, construct contextual reasoning prompts, and collaborate with a large language model to identify failures, highlight affected services, and recommend corrective actions.
+
+By benchmarking the agentic approach against traditional rule-based and correlation-driven methods, the research aims to show improvements in detection accuracy, robustness under incomplete telemetry, and overall time-to-resolution for incidents. The findings highlight the potential of combining observability standards with advanced AI reasoning to significantly enhance operational reliability in complex, large-scale systems.
 
